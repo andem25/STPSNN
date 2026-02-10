@@ -1,0 +1,527 @@
+{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# Net training"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## Overview\n",
+    "This notebook trains a Spiking Neural Network (SNN) for EEG-based seizure detection. The training pipeline includes:\n",
+    "- Environment setup and dependency installation\n",
+    "- EEG data loading and preprocessing\n",
+    "- Spike encoding\n",
+    "- Network architecture configuration\n",
+    "- Training with validation and early stopping\n",
+    "- Model checkpointing and results saving\n",
+    "\n",
+    "\n",
+    "The setup is based on this work:\n",
+    "- P. Busia, G. Leone, A. Matticola, L. Raffo and P. Meloni, \"Wearable Epilepsy Seizure Detection on FPGA With Spiking Neural Networks,\" in IEEE Transactions on Biomedical Circuits and Systems, vol. 19, no. 6, pp. 1175-1186, Dec. 2025, doi: 10.1109/TBCAS.2025.3575327.\n",
+    "\n"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 1. Environment Setup\n",
+    "Install required dependencies and clone the STPSNN repository. The code automatically detects whether it's running in Google Colab or a local environment."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 1,
+   "metadata": {
+    "id": "OHFtZ3qXad_7"
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "colab env\n",
+      "Requirement already satisfied: snntorch in /usr/local/lib/python3.12/dist-packages (0.9.4)\n",
+      "Requirement already satisfied: mne in /usr/local/lib/python3.12/dist-packages (1.11.0)\n",
+      "Requirement already satisfied: decorator in /usr/local/lib/python3.12/dist-packages (from mne) (4.4.2)\n",
+      "Requirement already satisfied: jinja2 in /usr/local/lib/python3.12/dist-packages (from mne) (3.1.6)\n",
+      "Requirement already satisfied: lazy-loader>=0.3 in /usr/local/lib/python3.12/dist-packages (from mne) (0.4)\n",
+      "Requirement already satisfied: matplotlib>=3.8 in /usr/local/lib/python3.12/dist-packages (from mne) (3.10.0)\n",
+      "Requirement already satisfied: numpy<3,>=1.26 in /usr/local/lib/python3.12/dist-packages (from mne) (2.0.2)\n",
+      "Requirement already satisfied: packaging in /usr/local/lib/python3.12/dist-packages (from mne) (26.0)\n",
+      "Requirement already satisfied: pooch>=1.5 in /usr/local/lib/python3.12/dist-packages (from mne) (1.9.0)\n",
+      "Requirement already satisfied: scipy>=1.11 in /usr/local/lib/python3.12/dist-packages (from mne) (1.16.3)\n",
+      "Requirement already satisfied: tqdm in /usr/local/lib/python3.12/dist-packages (from mne) (4.67.2)\n",
+      "Requirement already satisfied: contourpy>=1.0.1 in /usr/local/lib/python3.12/dist-packages (from matplotlib>=3.8->mne) (1.3.3)\n",
+      "Requirement already satisfied: cycler>=0.10 in /usr/local/lib/python3.12/dist-packages (from matplotlib>=3.8->mne) (0.12.1)\n",
+      "Requirement already satisfied: fonttools>=4.22.0 in /usr/local/lib/python3.12/dist-packages (from matplotlib>=3.8->mne) (4.61.1)\n",
+      "Requirement already satisfied: kiwisolver>=1.3.1 in /usr/local/lib/python3.12/dist-packages (from matplotlib>=3.8->mne) (1.4.9)\n",
+      "Requirement already satisfied: pillow>=8 in /usr/local/lib/python3.12/dist-packages (from matplotlib>=3.8->mne) (11.3.0)\n",
+      "Requirement already satisfied: pyparsing>=2.3.1 in /usr/local/lib/python3.12/dist-packages (from matplotlib>=3.8->mne) (3.3.2)\n",
+      "Requirement already satisfied: python-dateutil>=2.7 in /usr/local/lib/python3.12/dist-packages (from matplotlib>=3.8->mne) (2.9.0.post0)\n",
+      "Requirement already satisfied: platformdirs>=2.5.0 in /usr/local/lib/python3.12/dist-packages (from pooch>=1.5->mne) (4.5.1)\n",
+      "Requirement already satisfied: requests>=2.19.0 in /usr/local/lib/python3.12/dist-packages (from pooch>=1.5->mne) (2.32.4)\n",
+      "Requirement already satisfied: MarkupSafe>=2.0 in /usr/local/lib/python3.12/dist-packages (from jinja2->mne) (3.0.3)\n",
+      "Requirement already satisfied: six>=1.5 in /usr/local/lib/python3.12/dist-packages (from python-dateutil>=2.7->matplotlib>=3.8->mne) (1.17.0)\n",
+      "Requirement already satisfied: charset_normalizer<4,>=2 in /usr/local/lib/python3.12/dist-packages (from requests>=2.19.0->pooch>=1.5->mne) (3.4.4)\n",
+      "Requirement already satisfied: idna<4,>=2.5 in /usr/local/lib/python3.12/dist-packages (from requests>=2.19.0->pooch>=1.5->mne) (3.11)\n",
+      "Requirement already satisfied: urllib3<3,>=1.21.1 in /usr/local/lib/python3.12/dist-packages (from requests>=2.19.0->pooch>=1.5->mne) (2.5.0)\n",
+      "Requirement already satisfied: certifi>=2017.4.17 in /usr/local/lib/python3.12/dist-packages (from requests>=2.19.0->pooch>=1.5->mne) (2026.1.4)\n",
+      "Cloning into 'STPSNN'...\n",
+      "remote: Enumerating objects: 22, done.\u001b[K\n",
+      "remote: Counting objects: 100% (22/22), done.\u001b[K\n",
+      "remote: Compressing objects: 100% (21/21), done.\u001b[K\n",
+      "remote: Total 22 (delta 4), reused 0 (delta 0), pack-reused 0 (from 0)\u001b[K\n",
+      "Receiving objects: 100% (22/22), 14.94 KiB | 14.94 MiB/s, done.\n",
+      "Resolving deltas: 100% (4/4), done.\n"
+     ]
+    }
+   ],
+   "source": [
+    "# Try to detect if running in Google Colab environment\n",
+    "try:\n",
+    "  import google.colab\n",
+    "  print('colab env')\n",
+    "  !pip install snntorch\n",
+    "  !pip install mne\n",
+    "except:\n",
+    "  print('local env')\n",
+    "  pass\n",
+    "\n",
+    "# Import necessary libraries\n",
+    "import sys\n",
+    "import snntorch as snn\n",
+    "import gdown\n",
+    "import pickle\n",
+    "import numpy as np\n",
+    "# import dataloader\n",
+    "from torch.utils.data import Dataset, DataLoader\n",
+    "import torch\n",
+    "import torch.nn as nn\n",
+    "import snntorch as snn\n",
+    "import os\n",
+    "from collections import deque\n",
+    "\n",
+    "# Clone the spike-plasticity repository from GitHub\n",
+    "!git clone https://github.com/andem25/STPSNN"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 2. Data Loading\n",
+    "Download the dataset from Google Drive (if not already present) and load the preprocessed training and validation data from pickle files."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 2,
+   "metadata": {
+    "colab": {
+     "base_uri": "https://localhost:8080/"
+    },
+    "id": "AZ2Yf5UkbQlZ",
+    "outputId": "9ee94d1d-6b4e-4b95-e711-3269c2468081"
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Dataset already present\n"
+     ]
+    }
+   ],
+   "source": [
+    "# Check if data folder already exists, if not download it from Google Drive\n",
+    "if os.path.exists(\"data\"):\n",
+    "    print(\"Dataset already present\")\n",
+    "else:\n",
+    "    gdown.download_folder('https://drive.google.com/drive/folders/1EARnrSSj1DeHf0OiBmQ6_wcCJjKc8a2m?usp=sharing', output='data', quiet=False, use_cookies=False)\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 3,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Load training and validation data from pickle files\n",
+    "# Open and load training data\n",
+    "with open('data/train_routine/train_data.pkl', 'rb') as f:\n",
+    "    train_data = pickle.load(f)\n",
+    "with open('data/train_routine/valid_data.pkl', 'rb') as f:\n",
+    "    valid_data = pickle.load(f)\n",
+    "with open('data/train_routine/y_train.pkl', 'rb') as f:\n",
+    "    y_train = pickle.load(f)\n",
+    "with open('data/train_routine/y_valid.pkl', 'rb') as f:\n",
+    "    y_valid = pickle.load(f)\n",
+    "with open('data/test_routine/train/training_window.pkl', 'rb') as f:\n",
+    "    train = pickle.load(f)\n"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 3. Data Preprocessing and Encoding\n",
+    "Convert raw EEG signals into spike trains using thermometer encoding. This process includes:\n",
+    "1. Computing normalization boundaries (max/min values) from training data\n",
+    "2. Encoding each value into 16-level binary representation\n",
+    "3. Creating PyTorch DataLoaders for batch processing"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "RETURN MAX MIN\n",
+      "(450, 4, 2048)\n",
+      "massimo [np.float64(285.8119658119658), np.float64(223.2967032967033), np.float64(269.4017094017094), np.float64(164.6886446886447)]\n",
+      "minimo [np.float64(-285.8119658119658), np.float64(-223.2967032967033), np.float64(-269.4017094017094), np.float64(-164.6886446886447)]\n"
+     ]
+    }
+   ],
+   "source": [
+    "# Calculate maximum and minimum values for encoding normalization\n",
+    "# These values are computed from the first 5 minutes of training data\n",
+    "# and will be used to normalize all data before spike encoding\n",
+    "from STPSNN.encoding_functions import return_max_min\n",
+    "max_train, min_train = return_max_min(np.squeeze(train[0]).transpose(0,2,1), 5)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "massimo [np.float64(285.8119658119658), np.float64(223.2967032967033), np.float64(269.4017094017094), np.float64(164.6886446886447)]\n",
+      "minimo [np.float64(-285.8119658119658), np.float64(-223.2967032967033), np.float64(-269.4017094017094), np.float64(-164.6886446886447)]\n",
+      "massimo [np.float64(285.8119658119658), np.float64(223.2967032967033), np.float64(269.4017094017094), np.float64(164.6886446886447)]\n",
+      "minimo [np.float64(-285.8119658119658), np.float64(-223.2967032967033), np.float64(-269.4017094017094), np.float64(-164.6886446886447)]\n"
+     ]
+    }
+   ],
+   "source": [
+    "# Encode EEG data into spike trains and create data loaders\n",
+    "# The encoding process converts continuous EEG values into 16-level binary representations\n",
+    "# This thermometer encoding is particularly suitable for SNNs as it preserves temporal information\n",
+    "from STPSNN.encoding_functions import encode, EEG_Dataset\n",
+    "\n",
+    "# Encode training and validation data using the calculated min/max values\n",
+    "# Each value is converted to a 16-element binary vector (thermometer code)\n",
+    "train_spk   = np.array(encode(np.swapaxes(np.squeeze(train_data), 1, 2), max_train, min_train))\n",
+    "valid_spk   = np.array(encode(np.swapaxes(np.squeeze(valid_data), 1, 2), max_train, min_train))\n",
+    "\n",
+    "# Create TensorDatasets for efficient data handling\n",
+    "train_dataset = EEG_Dataset(train_spk, y_train)\n",
+    "valid_dataset = EEG_Dataset(valid_spk, y_valid)\n",
+    "\n",
+    "# Create DataLoaders with specified batch size\n",
+    "# shuffle=True for training helps prevent overfitting\n",
+    "# drop_last=True ensures all batches have the same size\n",
+    "batch_size = 32 # Batch size\n",
+    "train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True)\n",
+    "valid_dataloader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False, drop_last=True)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 7,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "(2160, 4, 2048, 16)\n",
+      "(540, 4, 2048, 16)\n"
+     ]
+    }
+   ],
+   "source": [
+    "# Print shapes of encoded spike data for verification\n",
+    "print(train_spk.shape)\n",
+    "print(valid_spk.shape)\n"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 4. Model Configuration\n",
+    "Define network architecture and training hyperparameters:\n",
+    "- **Network**: 2-layer SNN with Leaky Integrate-and-Fire (LIF) neurons\n",
+    "- **Temporal dynamics**: Number of time steps, decay rate (beta), and firing threshold\n",
+    "- **Training**: Learning rate, epochs, early stopping patience, and learning rate decay schedule"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Define output folder for trained model\n",
+    "FOLDER_OUT = 'trained_folder2'\n",
+    "\n",
+    "########### Network Architecture ###########\n",
+    "# Calculate number of inputs based on spike data dimensions\n",
+    "# Input size = channels * encoding_levels (4 channels * 16 levels = 64)\n",
+    "num_inputs = train_spk.shape[1] * train_spk.shape[3]\n",
+    "# print(num_inputs)\n",
+    "\n",
+    "num_outputs = 1  # Binary classification: seizure vs non-seizure\n",
+    "\n",
+    "# Temporal Dynamics\n",
+    "num_steps = 2048  # Number of time steps for simulation (affects temporal precision)\n",
+    "# beta = 0.95  # Decay rate (commented alternative value)\n",
+    "beta = 0.9  # Membrane potential decay rate (higher = slower decay, more temporal integration)\n",
+    "# threshold = 40.0  # Threshold (commented alternative value)\n",
+    "threshold = 1.0  # Spike threshold (neuron fires when membrane potential exceeds this)\n",
+    "############################################\n",
+    "\n",
+    "############ Training routine ##############\n",
+    "learn_treshold = False  # Whether to learn threshold during training (adaptive threshold)\n",
+    "learn_beta = False  # Whether to learn beta during training (adaptive decay)\n",
+    "epoch_start = 0  # Starting epoch number (useful for resuming training)\n",
+    "num_epochs = 500  # Total number of training epochs\n",
+    "lr_steps = 6  # Number of learning rate decay steps (allows lr to be reduced 6 times)\n",
+    "lr_decay = 1/3  # Learning rate decay factor (multiplies lr by this value when plateauing)\n",
+    "patience= 20  # Patience for early stopping (wait 20 epochs before reducing lr or stopping)\n",
+    "#counter = 0\n",
+    "best_loss = None  # Initialize best loss for model saving\n",
+    "lr_var = 0.001  # Initial learning rate (controls step size for weight updates)\n",
+    "############################################\n",
+    "\n",
+    "# Check if output folder already exists to avoid overwriting\n",
+    "# This prevents accidental loss of previously trained models\n",
+    "if os.path.exists(FOLDER_OUT):\n",
+    "    raise ValueError(f\"Folder {FOLDER_OUT} already exists. Please remove it or choose a different name.\")\n",
+    "else:\n",
+    "    os.makedirs(FOLDER_OUT)\n",
+    "\n",
+    "# Set device to GPU if available, otherwise CPU\n",
+    "# Training on GPU significantly speeds up computation for neural networks\n",
+    "dtype = torch.float\n",
+    "device = torch.device(\"cuda\") if torch.cuda.is_available() else torch.device(\"cpu\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 5. Network Initialization\n",
+    "Instantiate the SNN model and move it to the appropriate device (GPU if available, otherwise CPU)."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "num_inputs: 64, num_outputs: 1, num_steps: 2048, beta: 0.9, learn_treshold: False, learn_beta: False, threshold: 1.0\n",
+      "Net created successfully!\n"
+     ]
+    }
+   ],
+   "source": [
+    "# Create the spiking neural network with specified parameters\n",
+    "from STPSNN.net_definition import Net\n",
+    "print(f\"num_inputs: {num_inputs}, num_outputs: {num_outputs}, num_steps: {num_steps}, beta: {beta}, learn_treshold: {learn_treshold}, learn_beta: {learn_beta}, threshold: {threshold}\")\n",
+    "net = Net(num_inputs=num_inputs,\n",
+    "                  num_outputs=num_outputs,\n",
+    "                  num_steps=num_steps,\n",
+    "                  beta=beta,\n",
+    "                  learn_th=learn_treshold,\n",
+    "                  learn_b=learn_beta,\n",
+    "                  threshold=threshold).to(device)\n",
+    "print(\"Net created successfully!\")\n"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 6. Loss Function and Optimizer Setup\n",
+    "Configure the spike rate loss function and optimizer:\n",
+    "- **Loss**: Custom SpikeRate loss that matches output firing rates to target rates (0.35 for seizure, 0.03 for non-seizure)\n",
+    "- **Optimizer**: Adam optimizer with configurable learning rate\n",
+    "- **Sanity check**: Test network forward pass and compute initial loss"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 9,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Spikerate loss 1 out\n",
+      "The loss from an untrained network is 0.975\n"
+     ]
+    }
+   ],
+   "source": [
+    "# Define loss function and optimizer\n",
+    "from STPSNN.loss import SpikeRate\n",
+    "\n",
+    "# Create spike rate loss with target firing rates for correct/incorrect predictions\n",
+    "loss = SpikeRate(true_rate = 0.35, false_rate = 0.03)\n",
+    "\n",
+    "# Test the network with one batch to compute initial loss\n",
+    "data, targets = next(iter(train_dataloader))\n",
+    "data = data.to(device)\n",
+    "targets = targets.to(device)\n",
+    "\n",
+    "spk_rec, mem = net.forward(data)\n",
+    "\n",
+    "loss_val = loss(spk_rec, targets)\n",
+    "print(f\"The loss from an untrained network is {loss_val.item():.3f}\")\n",
+    "\n",
+    "# Initialize Adam optimizer\n",
+    "optimizer = torch.optim.Adam(net.parameters(), lr=lr_var, betas=(0.9, 0.999))\n"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 7. Training Execution\n",
+    "Run the training loop with:\n",
+    "- **Validation monitoring**: Track validation loss and accuracy after each epoch\n",
+    "- **Early stopping**: Stop training if validation loss doesn't improve for `patience` epochs\n",
+    "- **Learning rate scheduling**: Reduce learning rate by `lr_decay` factor after patience period\n",
+    "- **Model checkpointing**: Save best model based on validation loss and last trained model"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Epoch: 0, Step: 66/67 Train acc: 0.9818097014925373, Train loss: 0.40791124105453494\n",
+      "\n",
+      "Epoch: 0, Step: 15/16 Valid acc: 0.98046875, Valid loss: 0.0602809824049472887680817\n",
+      "Updated best model, saving in: trained_folder2/network.pt\n",
+      "\n",
+      "\n",
+      "Summary Epoch: 0, Train acc: 0.9818097014925373, Train loss: 0.4079112410545349, Valid acc: 0.98046875, Valid loss: 0.06028098240494728\n",
+      "Epoch: 1, Step: 66/67 Train acc: 0.9822761194029851, Train loss: 0.054573018103837975\n",
+      "\n",
+      "Epoch: 1, Step: 15/16 Valid acc: 0.98046875, Valid loss: 0.04616963490843773280948646\n",
+      "Updated best model, saving in: trained_folder2/network.pt\n",
+      "\n",
+      "\n",
+      "Summary Epoch: 1, Train acc: 0.9822761194029851, Train loss: 0.05457301810383797, Valid acc: 0.98046875, Valid loss: 0.04616963490843773\n"
+     ]
+    }
+   ],
+   "source": [
+    "# Execute the training routine\n",
+    "# This function orchestrates the entire training process including:\n",
+    "# - Forward pass through the network for each batch\n",
+    "# - Loss computation and backpropagation\n",
+    "# - Weight updates via optimizer\n",
+    "# - Validation evaluation after each epoch\n",
+    "# - Model checkpointing (saves best and last models)\n",
+    "# - Early stopping with learning rate decay\n",
+    "from STPSNN.training_routine import training_routine\n",
+    "\n",
+    "# Set to 2 epochs for quick testing, increase for full training (e.g., 500)\n",
+    "num_epochs = 2\n",
+    "\n",
+    "# Run training and collect history metrics\n",
+    "loss_hist, valid_loss_hist, acc_hist, valid_acc, best_loss = training_routine(\n",
+    "    net, \n",
+    "    train_dataloader, \n",
+    "    valid_dataloader, \n",
+    "    num_epochs, \n",
+    "    FOLDER_OUT, \n",
+    "    device, \n",
+    "    loss, \n",
+    "    optimizer, \n",
+    "    lr_decay, \n",
+    "    patience, \n",
+    "    epoch_start, \n",
+    "    f=open('training_log.txt', 'w'),  # Log file for detailed training progress\n",
+    "    lr_steps=lr_steps\n",
+    ")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 8. Save Training Results\n",
+    "Save the normalization parameters (max/min values) used during encoding. These are essential for preprocessing test data with the same scaling applied to training data."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 11,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Save training results (min/max values used for encoding) to JSON file\n",
+    "import json\n",
+    "results = {\n",
+    "    'maximum': max_train,\n",
+    "    'minimum': min_train\n",
+    "    \n",
+    "}\n",
+    "with open('./%s/training_results.json' % FOLDER_OUT, 'w') as f:\n",
+    "    json.dump(results, f)\n"
+   ]
+  }
+ ],
+ "metadata": {
+  "colab": {
+   "provenance": []
+  },
+  "kernelspec": {
+   "display_name": "Python 3 (ipykernel)",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.12.12"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 0
+}
