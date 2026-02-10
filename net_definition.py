@@ -54,7 +54,7 @@ class Net(nn.Module):
         self.lif2 = snn.Leaky(beta=beta, threshold=threshold, learn_threshold=learn_th, learn_beta=learn_b)
 
         if self.STP_ENABLE:
-            from STP_func import STP
+            from STPSNN.STP_func import STP
             self.STP2 = STP(STP_pot, STP_dep, weight_start, fr, fr_seiz)
 
     def forward(self, x, test=False):
