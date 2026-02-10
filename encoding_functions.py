@@ -7,7 +7,7 @@ import torch
 
 def level_define_16(val, massimo, minimo):
     """
-    Encode a single value into 16 discrete levels using thermometer encoding.
+    Encode a single value into 16 discrete levels using level encoding.
     
     Args:
         val: Value to encode
