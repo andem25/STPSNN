@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 import numpy as np
 from torch.utils.data import Dataset
-from net_definition import Net
+from STPSNN.net_definition import Net
 
 #   _______        _       _             
 #  |__   __|      (_)     (_)            
