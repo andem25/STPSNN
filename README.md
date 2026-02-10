@@ -31,7 +31,7 @@ STPSNN/
 ├── test_net_stp.ipynb       # Testing & STP evaluation notebook
 ├── net_definition.py        # SNN architecture (Net class with optional STP)
 ├── STP_func.py              # Short-Term Plasticity mechanism
-├── encoding_functions.py    # Thermometer encoding & EEG Dataset class
+├── encoding_functions.py    # Level encoding & EEG Dataset class
 ├── loss.py                  # Custom SpikeRate loss function
 ├── training_routine.py      # Training loop with validation & early stopping
 ├── test_routine.py          # Inference routine
