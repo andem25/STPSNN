@@ -23,6 +23,51 @@ The pipeline consists of two main phases:
 
 ---
 
+## Dataset
+
+This implementation uses the **CHB-MIT Scalp EEG Database**, a publicly available dataset from PhysioNet containing long-term EEG recordings from pediatric patients with intractable seizures.
+
+**Dataset Details:**
+- **Source**: [CHB-MIT Scalp EEG Database (PhysioNet)](https://physionet.org/content/chbmit/1.0.0/)
+- **Subject**: Patient chb01 (22-channel recordings sampled at 256 Hz)
+- **Selected Channels**: F7-T7, T7-P7, F8-T8, T8-P8 (4 channels)
+
+**Training Files** (7 recordings):
+- `chb01_02.edf`, `chb01_03.edf`, `chb01_04.edf`, `chb01_15.edf`, `chb01_16.edf`, `chb01_18.edf`, `chb01_21.edf`
+- Segmented into **2048-sample windows** (8 seconds at 256 Hz)
+- **80-20 train/validation split** with random shuffling for generalization
+
+**Test Files** (5 recordings):
+- `chb01_22.edf`, `chb01_23.edf`, `chb01_24.edf`, `chb01_25.edf`, `chb01_26.edf`
+- Segmented into **2048-sample windows** preserving **chronological order** to simulate real-time detection
+- No shuffling applied to maintain temporal continuity
+
+**Labeling Strategy:**
+A window is labeled as **SEIZURE (1)** if ≥50% of its samples overlap with annotated seizure periods; otherwise, it is labeled as **NON-SEIZURE (0)**. This threshold balances sensitivity while reducing false positives from brief seizure transitions.
+
+> **Note**: A chronologically-ordered version of the training data is also available for experiments requiring temporal structure preservation.
+
+### Preprocessed Data Structure
+
+The notebooks automatically download preprocessed data organized in [this Google folder](https://drive.google.com/drive/folders/1EARnrSSj1DeHf0OiBmQ6_wcCJjKc8a2m?usp=drive_link) in pickle files as follows:
+
+```
+eeg_data_share/
+├── test_routine/                  # Data for testing with chronological order
+│   ├── test/
+│   │   ├── label_window.pkl       # Test labels (seizure/non-seizure)
+│   │   └── training_window.pkl    # Encoded test EEG windows
+│   └── train/
+│       ├── label_window.pkl       # Train labels for STP parameter computation
+│       └── training_window.pkl    # Encoded train EEG windows (chronological)
+└── train_routine/                 # Data for training with shuffling
+    ├── train_data.pkl             # Encoded training windows (80% split, shuffled)
+    ├── valid_data.pkl             # Encoded validation windows (20% split, shuffled)
+    ├── y_train.pkl                # Training labels
+    └── y_valid.pkl                # Validation labels
+```
+
+
 ## Repository Structure
 
 ```
